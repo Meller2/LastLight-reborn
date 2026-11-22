@@ -1,11 +1,29 @@
 package dev.lastlight.reborn.ui
 
 import android.graphics.BitmapFactory
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,6 +83,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -76,11 +95,13 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.lastlight.reborn.R
 import dev.lastlight.reborn.data.DeviceHardwareInfo
 import dev.lastlight.reborn.data.DeviceInfo
 import dev.lastlight.reborn.data.GameFilesStatus
@@ -90,6 +111,7 @@ import dev.lastlight.reborn.data.PerfPreset
 import dev.lastlight.reborn.ui.theme.MetroColors
 import kotlinx.coroutines.delay
 import java.util.Locale
+import kotlin.math.sin
 
 private const val TAB_HOME = 0
 private const val TAB_CONTROLS = 1
@@ -151,53 +173,66 @@ fun LauncherScreen(
                 }
             )
 
-            // Main content stage
+            // Main content stage with smooth animated tab transitions
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
                     .padding(horizontal = 22.dp, vertical = 14.dp)
             ) {
-                when (selectedTab) {
-                    TAB_HOME -> HomeDashboard(
-                        config = config,
-                        filesStatus = filesStatus,
-                        hwInfo = hwInfo,
-                        batteryTempC = batteryTempC,
-                        coverBitmap = coverBitmap,
-                        hasStoragePermission = hasStoragePermission,
-                        saveFilesCount = saveFilesCount,
-                        statusMessage = statusMessage,
-                        s = s,
-                        onConfigChange = onConfigChange,
-                        onRequestStoragePermission = onRequestStoragePermission,
-                        onPlayClick = onPlayClick,
-                        onPickGameFolder = onPickGameFolder,
-                        onAutoFindGameFolder = onAutoFindGameFolder,
-                        onPickTurnipZip = onPickTurnipZip,
-                        onExportSaves = onExportSaves,
-                        onNavigateTab = { selectedTab = it }
-                    )
-                    TAB_CONTROLS -> ControlsTab(config, s, onConfigChange)
-                    TAB_GRAPHICS -> GraphicsTab(config, filesStatus, s, onConfigChange)
-                    TAB_FILES -> FilesTab(
-                        config = config,
-                        filesStatus = filesStatus,
-                        saveFilesCount = saveFilesCount,
-                        statusMessage = statusMessage,
-                        s = s,
-                        onPickGameFolder = onPickGameFolder,
-                        onAutoFindGameFolder = onAutoFindGameFolder,
-                        onPickTurnipZip = onPickTurnipZip,
-                        onExportSaves = onExportSaves,
-                        onImportSaves = onImportSaves
-                    )
-                    TAB_ABOUT -> AboutTab(
-                        config = config,
-                        hwInfo = hwInfo,
-                        filesStatus = filesStatus,
-                        s = s
-                    )
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = {
+                        (fadeIn(tween(220, easing = FastOutSlowInEasing)) +
+                            slideInVertically(tween(220, easing = FastOutSlowInEasing)) { it / 28 })
+                            .togetherWith(
+                                fadeOut(tween(150)) +
+                                    slideOutVertically(tween(150)) { -it / 40 }
+                            )
+                    },
+                    label = "tabTransition"
+                ) { tab ->
+                    when (tab) {
+                        TAB_HOME -> HomeDashboard(
+                            config = config,
+                            filesStatus = filesStatus,
+                            hwInfo = hwInfo,
+                            batteryTempC = batteryTempC,
+                            coverBitmap = coverBitmap,
+                            hasStoragePermission = hasStoragePermission,
+                            saveFilesCount = saveFilesCount,
+                            statusMessage = statusMessage,
+                            s = s,
+                            onConfigChange = onConfigChange,
+                            onRequestStoragePermission = onRequestStoragePermission,
+                            onPlayClick = onPlayClick,
+                            onPickGameFolder = onPickGameFolder,
+                            onAutoFindGameFolder = onAutoFindGameFolder,
+                            onPickTurnipZip = onPickTurnipZip,
+                            onExportSaves = onExportSaves,
+                            onNavigateTab = { selectedTab = it }
+                        )
+                        TAB_CONTROLS -> ControlsTab(config, s, onConfigChange)
+                        TAB_GRAPHICS -> GraphicsTab(config, filesStatus, s, onConfigChange)
+                        TAB_FILES -> FilesTab(
+                            config = config,
+                            filesStatus = filesStatus,
+                            saveFilesCount = saveFilesCount,
+                            statusMessage = statusMessage,
+                            s = s,
+                            onPickGameFolder = onPickGameFolder,
+                            onAutoFindGameFolder = onAutoFindGameFolder,
+                            onPickTurnipZip = onPickTurnipZip,
+                            onExportSaves = onExportSaves,
+                            onImportSaves = onImportSaves
+                        )
+                        TAB_ABOUT -> AboutTab(
+                            config = config,
+                            hwInfo = hwInfo,
+                            filesStatus = filesStatus,
+                            s = s
+                        )
+                    }
                 }
             }
         }
@@ -206,50 +241,82 @@ fun LauncherScreen(
 
 @Composable
 private fun AtmosphericBackdrop(coverBitmap: ImageBitmap?) {
+    val infinite = rememberInfiniteTransition(label = "ambientMetro")
+    val emberPhase by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 12000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "embers"
+    )
+    val glowPulse by infinite.animateFloat(
+        initialValue = 0.12f,
+        targetValue = 0.21f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 4200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glow"
+    )
+
     Box(modifier = Modifier.fillMaxSize()) {
-        if (coverBitmap != null) {
-            Image(
-                bitmap = coverBitmap,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(0.76f)
-                    .align(Alignment.CenterEnd)
-                    .alpha(0.30f)
-            )
-        }
+        // Generated widescreen Metro hero key art (always crisp, zero external dependency)
+        Image(
+            painter = painterResource(id = R.drawable.metro_hero_bg),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .alpha(0.88f)
+        )
         Canvas(modifier = Modifier.fillMaxSize()) {
-            // Subtle warm atmospheric Metro haze on upper-center-right
+            // Breathing warm tunnel amber glow behind the stalker & rails
             drawRect(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        MetroColors.Amber.copy(alpha = 0.16f),
-                        MetroColors.AmberDim.copy(alpha = 0.06f),
+                        MetroColors.Amber.copy(alpha = glowPulse),
+                        MetroColors.AmberDim.copy(alpha = glowPulse * 0.35f),
                         Color.Transparent
                     ),
-                    center = Offset(size.width * 0.62f, size.height * 0.24f),
-                    radius = size.width * 0.50f
+                    center = Offset(size.width * 0.72f, size.height * 0.34f),
+                    radius = size.width * 0.45f
                 )
             )
-            // Left-to-right dark gradient blending smoothly from sidebar into hero
+            // Left-to-right cinematic scrim blending sidebar into hero negative space
             drawRect(
                 brush = Brush.horizontalGradient(
-                    0.0f to MetroColors.BgDeep.copy(alpha = 0.96f),
-                    0.26f to MetroColors.BgDeep.copy(alpha = 0.84f),
-                    0.58f to MetroColors.BgDeep.copy(alpha = 0.42f),
-                    1.0f to MetroColors.BgDeep.copy(alpha = 0.72f)
+                    0.0f to MetroColors.BgDeep.copy(alpha = 0.94f),
+                    0.22f to MetroColors.BgDeep.copy(alpha = 0.78f),
+                    0.50f to MetroColors.BgDeep.copy(alpha = 0.22f),
+                    0.82f to MetroColors.BgDeep.copy(alpha = 0.26f),
+                    1.0f to MetroColors.BgDeep.copy(alpha = 0.62f)
                 )
             )
-            // Bottom grounding vignette so bento cards pop crisply
+            // Bottom grounding vignette so bento cards stay razor sharp
             drawRect(
                 brush = Brush.verticalGradient(
-                    0.0f to MetroColors.BgDeep.copy(alpha = 0.35f),
-                    0.50f to Color.Transparent,
-                    0.82f to MetroColors.BgDeep.copy(alpha = 0.82f),
-                    1.0f to MetroColors.BgDeep.copy(alpha = 0.96f)
+                    0.0f to MetroColors.BgDeep.copy(alpha = 0.28f),
+                    0.46f to Color.Transparent,
+                    0.78f to MetroColors.BgDeep.copy(alpha = 0.72f),
+                    1.0f to MetroColors.BgDeep.copy(alpha = 0.95f)
                 )
             )
+            // Subtle drifting tunnel embers
+            val seeds = floatArrayOf(0.28f, 0.39f, 0.48f, 0.57f, 0.66f, 0.74f, 0.83f, 0.91f)
+            seeds.forEachIndexed { idx, sx ->
+                val p = (emberPhase + idx * 0.137f) % 1f
+                val x = size.width * (sx + 0.018f * sin((p * 6.283f + idx).toDouble()).toFloat())
+                val y = size.height * (0.95f - p * 0.85f)
+                val alpha = (sin((p * Math.PI)).toFloat() * 0.45f).coerceIn(0f, 0.45f)
+                val r = if (idx % 3 == 0) 2.4f else 1.5f
+                drawCircle(
+                    color = MetroColors.AmberBright.copy(alpha = alpha),
+                    radius = r,
+                    center = Offset(x, y)
+                )
+            }
         }
     }
 }
@@ -305,38 +372,58 @@ private fun LeftNavigationRail(
                     }
                 }
 
-                // Navigation buttons
+                // Navigation buttons with smooth animated active state
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     items.forEach { (id, label, icon) ->
                         val active = id == selectedTab
+                        val bgTint by animateColorAsState(
+                            targetValue = if (active) MetroColors.Amber.copy(alpha = 0.22f) else Color.Transparent,
+                            animationSpec = tween(200),
+                            label = "navBg"
+                        )
+                        val borderTint by animateColorAsState(
+                            targetValue = if (active) MetroColors.BorderGlass else Color.Transparent,
+                            animationSpec = tween(200),
+                            label = "navBorder"
+                        )
+                        val iconTint by animateColorAsState(
+                            targetValue = if (active) MetroColors.AmberBright else MetroColors.TextMuted,
+                            animationSpec = tween(200),
+                            label = "navIcon"
+                        )
+                        val textTint by animateColorAsState(
+                            targetValue = if (active) MetroColors.TextPrimary else MetroColors.TextSecondary,
+                            animationSpec = tween(200),
+                            label = "navText"
+                        )
+                        val barHeight by animateDpAsState(
+                            targetValue = if (active) 22.dp else 0.dp,
+                            animationSpec = tween(220, easing = FastOutSlowInEasing),
+                            label = "navBar"
+                        )
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(40.dp)
                                 .clip(RoundedCornerShape(11.dp))
                                 .background(
-                                    if (active) Brush.horizontalGradient(
+                                    Brush.horizontalGradient(
                                         listOf(
-                                            MetroColors.Amber.copy(alpha = 0.22f),
-                                            MetroColors.SurfaceElevated.copy(alpha = 0.72f)
+                                            bgTint,
+                                            if (active) MetroColors.SurfaceElevated.copy(alpha = 0.72f) else Color.Transparent
                                         )
-                                    ) else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
+                                    )
                                 )
-                                .border(
-                                    width = if (active) 1.dp else 0.dp,
-                                    color = if (active) MetroColors.BorderGlass else Color.Transparent,
-                                    shape = RoundedCornerShape(11.dp)
-                                )
+                                .border(1.dp, borderTint, RoundedCornerShape(11.dp))
                                 .clickable { onSelectTab(id) },
                             contentAlignment = Alignment.CenterStart
                         ) {
-                            if (active) {
+                            if (barHeight > 0.dp) {
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.CenterStart)
-                                        .padding(vertical = 8.dp)
                                         .width(3.dp)
-                                        .fillMaxHeight()
+                                        .height(barHeight)
                                         .clip(CircleShape)
                                         .background(MetroColors.AmberBright)
                                 )
@@ -349,12 +436,12 @@ private fun LeftNavigationRail(
                                 Icon(
                                     imageVector = icon,
                                     contentDescription = label,
-                                    tint = if (active) MetroColors.TextPrimary else MetroColors.TextMuted,
+                                    tint = iconTint,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Text(
                                     text = label,
-                                    color = if (active) MetroColors.TextPrimary else MetroColors.TextSecondary,
+                                    color = textTint,
                                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                                     fontSize = 13.sp,
                                     maxLines = 1,
@@ -406,31 +493,14 @@ private fun LeftNavigationRail(
 
 @Composable
 private fun MetroLogoMark(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val path = Path().apply {
-            moveTo(w * 0.10f, h * 0.88f)
-            lineTo(w * 0.10f, h * 0.14f)
-            lineTo(w * 0.28f, h * 0.14f)
-            lineTo(w * 0.50f, h * 0.52f)
-            lineTo(w * 0.72f, h * 0.14f)
-            lineTo(w * 0.90f, h * 0.14f)
-            lineTo(w * 0.90f, h * 0.88f)
-            lineTo(w * 0.72f, h * 0.88f)
-            lineTo(w * 0.72f, h * 0.44f)
-            lineTo(w * 0.50f, h * 0.78f)
-            lineTo(w * 0.28f, h * 0.44f)
-            lineTo(w * 0.28f, h * 0.88f)
-            close()
-        }
-        drawPath(
-            path = path,
-            brush = Brush.verticalGradient(
-                listOf(MetroColors.AmberBright, MetroColors.AmberDeep)
-            )
-        )
-    }
+    Image(
+        painter = painterResource(id = R.drawable.lastlight_emblem),
+        contentDescription = "LastLight Reborn",
+        contentScale = ContentScale.Crop,
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .border(1.dp, MetroColors.Amber.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+    )
 }
 
 @Composable
@@ -591,8 +661,16 @@ private fun HomeDashboard(
                             )
                         }
                     } else {
+                        val playInteraction = remember { MutableInteractionSource() }
+                        val playPressed by playInteraction.collectIsPressedAsState()
+                        val playScale by animateFloatAsState(
+                            targetValue = if (playPressed) 0.96f else 1f,
+                            animationSpec = tween(110),
+                            label = "playScale"
+                        )
                         Box(
                             modifier = Modifier
+                                .scale(playScale)
                                 .height(44.dp)
                                 .width(196.dp)
                                 .clip(RoundedCornerShape(22.dp))
@@ -603,7 +681,17 @@ private fun HomeDashboard(
                                         listOf(MetroColors.SurfaceElevated, MetroColors.SurfaceElevated)
                                     )
                                 )
-                                .clickable(enabled = ready, onClick = onPlayClick),
+                                .border(
+                                    width = 1.dp,
+                                    color = if (ready) Color(0x55FFE4A0) else MetroColors.BorderGlass,
+                                    shape = RoundedCornerShape(22.dp)
+                                )
+                                .clickable(
+                                    enabled = ready,
+                                    interactionSource = playInteraction,
+                                    indication = null,
+                                    onClick = onPlayClick
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
@@ -1079,18 +1167,21 @@ private fun HeroPill(text: String) {
 
 @Composable
 private fun MiniPresetPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    val bg by animateColorAsState(if (selected) MetroColors.Amber else MetroColors.SurfaceElevated, tween(180), label = "miniBg")
+    val border by animateColorAsState(if (selected) MetroColors.AmberBright else MetroColors.BorderGlass, tween(180), label = "miniBorder")
+    val text by animateColorAsState(if (selected) Color(0xFF140D04) else MetroColors.TextSecondary, tween(180), label = "miniTxt")
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) MetroColors.Amber else MetroColors.SurfaceElevated)
-            .border(1.dp, if (selected) MetroColors.AmberBright else MetroColors.BorderGlass, RoundedCornerShape(8.dp))
+            .background(bg)
+            .border(1.dp, border, RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 9.dp, vertical = 5.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = label,
-            color = if (selected) Color(0xFF140D04) else MetroColors.TextSecondary,
+            color = text,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
             fontSize = 11.sp

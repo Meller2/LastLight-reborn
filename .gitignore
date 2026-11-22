@@ -12,6 +12,7 @@ prod.keys
 title.keys
 *.key
 *.bin
+!patches/0100F0400E850000/vk_prewarm.bin
 *.lib
 *.ogv
 *.vfs0
