@@ -89,6 +89,12 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 - [ ] Вшитый кэш пайплайнов (`vk_prewarm.bin`) и редактор раскладки HUD
 - [ ] Сборка `.nsp` → `.nup` и шейдеров прямо на смартфоне (без ПК)
 
+## Благодарности (Credits)
+
+- **[peanuts-native](https://github.com/igawa6/peanuts-native)** (`igawa6`) — Horizon HLE, нативное ядро исполнения ARM64 и бэкенд NVN → Vulkan 1.3, лежащие в основе LastLight Reborn.
+- **Mesa Turnip и AdrenoTools** — открытые драйверы Vulkan и загрузка кастомных GPU-драйверов для Qualcomm Adreno.
+- **4A Games** — создатели _Metro: Last Light Redux_ и движка 4A Engine.
+
 ## Правовая информация
 
 Репозиторий **не содержит** игровых файлов, ROM-образов, ключей, прошивки или шейдеров. Пользователь обязан использовать собственную легально приобретённую копию _Metro: Last Light Redux_ для Nintendo Switch. Все товарные знаки принадлежат их правообладателям.

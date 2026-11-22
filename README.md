@@ -89,6 +89,12 @@ See [PLAN.md](PLAN.md) for the detailed tracker:
 - [ ] Pre-warmed Vulkan pipeline cache (`vk_prewarm.bin`) & HUD layout editor
 - [ ] On-device `.nsp` → `.nup` & shader packer (zero PC dependency)
 
+## Credits
+
+- **[peanuts-native](https://github.com/igawa6/peanuts-native)** (`igawa6`) — Horizon HLE, native ARM64 execution core, and NVN → Vulkan 1.3 backend that powers LastLight Reborn.
+- **Mesa Turnip & AdrenoTools** — Open-source Vulkan driver stack and custom driver loading for Qualcomm Adreno GPUs.
+- **4A Games** — Creators of _Metro: Last Light Redux_ and the 4A Engine.
+
 ## Legal Notice
 
 This repository contains **no game files, ROMs, keys, firmware, or shaders**. You must provide your own legally owned copy of _Metro: Last Light Redux_ for Nintendo Switch. All trademarks belong to their respective owners.
