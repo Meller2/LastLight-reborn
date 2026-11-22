@@ -63,9 +63,12 @@ import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.WarningAmber
+import androidx.compose.material.icons.rounded.InstallMobile
+import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -106,10 +109,12 @@ import dev.lastlight.reborn.data.DeviceHardwareInfo
 import dev.lastlight.reborn.data.DeviceInfo
 import dev.lastlight.reborn.data.GameFilesStatus
 import dev.lastlight.reborn.data.GyroMode
+import dev.lastlight.reborn.data.InstallState
 import dev.lastlight.reborn.data.LauncherConfig
 import dev.lastlight.reborn.data.PerfPreset
 import dev.lastlight.reborn.ui.theme.MetroColors
 import kotlinx.coroutines.delay
+import java.io.File
 import java.util.Locale
 import kotlin.math.sin
 
@@ -126,6 +131,10 @@ fun LauncherScreen(
     hasStoragePermission: Boolean,
     saveFilesCount: Int,
     statusMessage: String?,
+    selectedNspPath: String?,
+    hasProdKeys: Boolean,
+    hasFullPacker: Boolean,
+    installState: InstallState,
     onConfigChange: (LauncherConfig) -> Unit,
     onRequestStoragePermission: () -> Unit,
     onPlayClick: () -> Unit,
@@ -133,7 +142,11 @@ fun LauncherScreen(
     onAutoFindGameFolder: () -> Unit,
     onPickTurnipZip: () -> Unit,
     onExportSaves: () -> Unit,
-    onImportSaves: () -> Unit
+    onImportSaves: () -> Unit,
+    onPickNsp: () -> Unit,
+    onPickKeys: () -> Unit,
+    onStartInstall: () -> Unit,
+    onCancelInstall: () -> Unit
 ) {
     val context = LocalContext.current
     val s = stringsFor(config.language)
@@ -219,12 +232,20 @@ fun LauncherScreen(
                             filesStatus = filesStatus,
                             saveFilesCount = saveFilesCount,
                             statusMessage = statusMessage,
+                            selectedNspPath = selectedNspPath,
+                            hasProdKeys = hasProdKeys,
+                            hasFullPacker = hasFullPacker,
+                            installState = installState,
                             s = s,
                             onPickGameFolder = onPickGameFolder,
                             onAutoFindGameFolder = onAutoFindGameFolder,
                             onPickTurnipZip = onPickTurnipZip,
                             onExportSaves = onExportSaves,
-                            onImportSaves = onImportSaves
+                            onImportSaves = onImportSaves,
+                            onPickNsp = onPickNsp,
+                            onPickKeys = onPickKeys,
+                            onStartInstall = onStartInstall,
+                            onCancelInstall = onCancelInstall
                         )
                         TAB_ABOUT -> AboutTab(
                             config = config,
@@ -1377,17 +1398,165 @@ private fun FilesTab(
     filesStatus: GameFilesStatus,
     saveFilesCount: Int,
     statusMessage: String?,
+    selectedNspPath: String?,
+    hasProdKeys: Boolean,
+    hasFullPacker: Boolean,
+    installState: InstallState,
     s: UiStrings,
     onPickGameFolder: () -> Unit,
     onAutoFindGameFolder: () -> Unit,
     onPickTurnipZip: () -> Unit,
     onExportSaves: () -> Unit,
-    onImportSaves: () -> Unit
+    onImportSaves: () -> Unit,
+    onPickNsp: () -> Unit,
+    onPickKeys: () -> Unit,
+    onStartInstall: () -> Unit,
+    onCancelInstall: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Phase 3: On-device .nsp / .xci / .nsz installer card
+        GlassCard {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Rounded.InstallMobile, contentDescription = null, tint = MetroColors.AmberBright, modifier = Modifier.size(18.dp))
+                    Text(s.installerTitle, color = MetroColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (hasFullPacker) MetroColors.PhosphorGreen.copy(alpha = 0.14f)
+                            else MetroColors.Amber.copy(alpha = 0.14f)
+                        )
+                        .border(
+                            1.dp,
+                            if (hasFullPacker) MetroColors.PhosphorGreen.copy(alpha = 0.35f)
+                            else MetroColors.Amber.copy(alpha = 0.40f),
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = if (hasFullPacker) s.installerFullBadge else s.installerImportOnlyBadge,
+                        color = if (hasFullPacker) MetroColors.PhosphorGreen else MetroColors.AmberBright,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(
+                            Icons.Rounded.Key,
+                            contentDescription = null,
+                            tint = if (hasProdKeys) MetroColors.PhosphorGreen else MetroColors.TextMuted,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = if (hasProdKeys) s.keysLoaded else s.keysMissing,
+                            color = if (hasProdKeys) MetroColors.PhosphorGreen else MetroColors.TextSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Text(
+                        text = selectedNspPath?.let { File(it).name } ?: s.nspMissing,
+                        color = if (selectedNspPath != null) MetroColors.TextPrimary else MetroColors.TextMuted,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = onPickKeys,
+                        enabled = !installState.running,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(s.pickKeys, color = MetroColors.TextPrimary, fontSize = 11.sp)
+                    }
+                    OutlinedButton(
+                        onClick = onPickNsp,
+                        enabled = !installState.running,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(s.pickNsp, color = MetroColors.TextPrimary, fontSize = 11.sp)
+                    }
+                    if (installState.running) {
+                        OutlinedButton(
+                            onClick = onCancelInstall,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(s.cancelInstall, color = MetroColors.DangerRed, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
+                        }
+                    } else {
+                        Button(
+                            onClick = onStartInstall,
+                            enabled = hasProdKeys && selectedNspPath != null,
+                            colors = ButtonDefaults.buttonColors(containerColor = MetroColors.Amber),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(s.startInstall, color = Color(0xFF140D04), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+
+            if (installState.running || installState.completedFolder != null || installState.error != null) {
+                Spacer(Modifier.height(10.dp))
+                if (installState.error != null) {
+                    Text(installState.error, color = MetroColors.DangerRed, fontSize = 12.sp)
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = installState.stageTitle,
+                            color = if (installState.running) MetroColors.AmberBright else MetroColors.PhosphorGreen,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "${(installState.progress * 100).toInt()}%",
+                            color = MetroColors.TextSecondary,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Spacer(Modifier.height(5.dp))
+                    LinearProgressIndicator(
+                        progress = { installState.progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
+                        color = if (installState.running) MetroColors.AmberBright else MetroColors.PhosphorGreen,
+                        trackColor = MetroColors.BorderSubtle
+                    )
+                    if (installState.detail.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(installState.detail, color = MetroColors.TextSecondary, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
         GlassCard {
             Row(
                 modifier = Modifier.fillMaxWidth(),

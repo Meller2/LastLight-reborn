@@ -13,6 +13,9 @@ set(GAME "0100F0400E850000" CACHE STRING "" FORCE)
 set(NX_GENERIC_HOST OFF CACHE BOOL "" FORCE)
 add_subdirectory("${NX_PEANUTS_ROOT}/android/host" "${CMAKE_CURRENT_BINARY_DIR}/nxhost_build")
 
+# Build libnximport.so (.nsp / .xci / .nsz -> .nup native importer, dev.peanuts.importer.Native)
+add_subdirectory("${NX_PEANUTS_ROOT}/dm/peanuts/import" "${CMAKE_CURRENT_BINARY_DIR}/nximport_build")
+
 add_library(lastlight_bridge SHARED lastlight_jni.c)
 target_include_directories(lastlight_bridge PRIVATE
   "${NX_PEANUTS_ROOT}/dm/host/android"

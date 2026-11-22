@@ -18,10 +18,13 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import dev.lastlight.reborn.data.AppPrefs
 import dev.lastlight.reborn.data.GamePaths
+import dev.lastlight.reborn.data.InstallState
 import dev.lastlight.reborn.data.LauncherConfig
+import dev.lastlight.reborn.data.OnDeviceInstaller
 import dev.lastlight.reborn.data.SaveBackupManager
 import dev.lastlight.reborn.ui.LauncherScreen
 import dev.lastlight.reborn.ui.theme.MetroTheme
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     private lateinit var prefs: AppPrefs
@@ -30,6 +33,11 @@ class MainActivity : ComponentActivity() {
     private var saveCount by mutableIntStateOf(0)
     private var statusMsg by mutableStateOf<String?>(null)
     private var refreshTick by mutableIntStateOf(0)
+
+    // Phase 3 on-device installer state
+    private var selectedNspPath by mutableStateOf<String?>(null)
+    private var hasProdKeys by mutableStateOf(false)
+    private var installState by mutableStateOf(InstallState())
 
     private val folderPicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
@@ -41,6 +49,30 @@ class MainActivity : ComponentActivity() {
                 refreshTick++
             } else {
                 statusMsg = if (config.language == "ru") "Не удалось определить путь к папке" else "Could not resolve folder path"
+            }
+        }
+    }
+
+    private val nspPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val resolved = OnDeviceInstaller.resolveDocumentUriToPath(uri)
+            if (resolved != null && File(resolved).isFile) {
+                selectedNspPath = resolved
+                statusMsg = if (config.language == "ru") "Выбран образ: ${File(resolved).name}" else "Selected dump: ${File(resolved).name}"
+            } else {
+                statusMsg = if (config.language == "ru") "Выберите .nsp/.xci/.nsz из памяти телефона (Downloads)" else "Pick .nsp/.xci/.nsz from internal storage (Downloads)"
+            }
+        }
+    }
+
+    private val keysPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val imported = OnDeviceInstaller.importKeysFile(this, uri)
+            if (imported != null) {
+                hasProdKeys = true
+                statusMsg = if (config.language == "ru") "Файл prod.keys импортирован" else "prod.keys imported"
+            } else {
+                statusMsg = if (config.language == "ru") "Не удалось прочитать prod.keys" else "Could not read prod.keys"
             }
         }
     }
@@ -108,6 +140,10 @@ class MainActivity : ComponentActivity() {
                     hasStoragePermission = hasStoragePerm,
                     saveFilesCount = saveCount,
                     statusMessage = statusMsg,
+                    selectedNspPath = selectedNspPath,
+                    hasProdKeys = hasProdKeys,
+                    hasFullPacker = OnDeviceInstaller.hasFullPacker(this),
+                    installState = installState,
                     onConfigChange = { updated ->
                         config = updated
                         prefs.save(updated)
@@ -145,6 +181,41 @@ class MainActivity : ComponentActivity() {
                     },
                     onImportSaves = {
                         importLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
+                    },
+                    onPickNsp = {
+                        nspPicker.launch(arrayOf("*/*"))
+                    },
+                    onPickKeys = {
+                        keysPicker.launch(arrayOf("*/*"))
+                    },
+                    onStartInstall = {
+                        val nsp = selectedNspPath
+                        val keys = OnDeviceInstaller.savedKeysFile(this)
+                        if (nsp != null && keys != null) {
+                            val outDir = File(
+                                config.gameFolder.ifBlank { "/sdcard/Download/LastLightReborn/Metro Last Light Redux" }
+                            )
+                            OnDeviceInstaller.startInstall(
+                                context = this,
+                                nspPath = nsp,
+                                keysFile = keys,
+                                outputDir = outDir,
+                                isRussian = config.language == "ru"
+                            ) { state ->
+                                runOnUiThread {
+                                    installState = state
+                                    val doneFolder = state.completedFolder
+                                    if (!state.running && doneFolder != null) {
+                                        config = config.copy(gameFolder = doneFolder)
+                                        prefs.save(config)
+                                        refreshTick++
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    onCancelInstall = {
+                        OnDeviceInstaller.cancel()
                     }
                 )
             }
@@ -161,6 +232,7 @@ class MainActivity : ComponentActivity() {
         config = prefs.load()
         hasStoragePerm = Environment.isExternalStorageManager()
         saveCount = SaveBackupManager.countSaveFiles(this)
+        hasProdKeys = OnDeviceInstaller.savedKeysFile(this) != null
         refreshTick++
     }
 
