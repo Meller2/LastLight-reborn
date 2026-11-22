@@ -1,0 +1,3 @@
+[submodule "peanuts-native"]
+	path = peanuts-native
+	url = https://github.com/igawa6/peanuts-native

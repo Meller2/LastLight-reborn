@@ -1,0 +1,46 @@
+# PEANUTS: Game profile of Metro: Last Light Redux (Switch, base v0 = 1.0.0).
+# 4A Engine, SDK 8.2.0 (same sdk build as Diablo III), NVN. Shaders live in romfs/shaders.nx (854 unique shaders: 463 pixel, 391 vertex).
+
+# ---- Identity ----
+title_id	0100F0400E850000
+program_id	0100F0400E850000
+
+# ---- App ----
+name	Metro: Last Light Redux
+ipa	MetroLastLightRedux.ipa
+app_category	public.app-category.action-games
+fps_limit_present	1
+fps_limit_max	60
+
+# ---- Versions ----
+build	v0	1.0.0	main=85c362cc9790f0edf23749b041953c51	sdk=3ae34e689d7a35f13cbf42bfd672af8b
+package	v0
+shader_versions	v0
+
+# ---- Files ----
+# every module main imports from
+modules	main sdk
+romfs_marker	content00.vfs0
+zip_store	.nso:.nss:.nx:.ogv:.png:.vfs0:.vfx:.metallib
+
+# ---- Memory ----
+# main sets a heap of at most the pool − 64 MB: a 3328 MB heap region
+mem_reserve	0x100000000
+mem_alias	0x10000000
+mem_stack	0x10000000
+app_pool	0xCD500000
+# the NPDM declares 0 MB of system resource: IsVirtualAddressMemoryEnabled is false, as on Horizon (Big Brain Academy: Brain vs. Brain sets a heap only then)
+sys_resource	0x0
+
+# ---- Shader split ----
+shader_groups	/=romfs
+shader_note	Metro: Last Light Redux shaders
+
+# ---- Graphics ----
+# the game calls nvnDeviceSetDepthMode with near = 0 at boot
+depth_mode	zero
+aspect_plan	85c362cc9790f0edf23749b041953c51	ratio_fmov	m0x5a504	0118211e
+aspect_plan	85c362cc9790f0edf23749b041953c51	ratio_movz	m0x5a5c8	29c79152
+aspect_plan	85c362cc9790f0edf23749b041953c51	ratio_movk	m0x5a5cc	69fca772
+aspect_plan	85c362cc9790f0edf23749b041953c51	ratio_fmov	m0x5a5f0	009941bd
+aspect_plan	85c362cc9790f0edf23749b041953c51	ratio_fmov	m0x5a6c4	0118211e

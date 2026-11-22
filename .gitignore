@@ -1,0 +1,45 @@
+# Game assets, ROMs, keys, firmware, and extracted packs (NEVER commit)
+*.nsp
+*.xci
+*.nsz
+*.xcz
+*.nup
+*.nca
+*.nro
+*.nso
+*.keys
+prod.keys
+title.keys
+*.key
+*.bin
+*.lib
+*.ogv
+*.vfs0
+
+# Local workspace, toolchains, logs, and pulled device data
+work/
+logs/
+*.log
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Gradle / Android / CMake / IDE
+.gradle/
+.kotlin/
+.cxx/
+build/
+app/build/
+app/.cxx/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.navigation/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
