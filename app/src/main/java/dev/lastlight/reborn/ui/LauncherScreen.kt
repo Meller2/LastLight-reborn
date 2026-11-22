@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,14 +24,26 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AcUnit
+import androidx.compose.material.icons.rounded.Android
 import androidx.compose.material.icons.rounded.Balance
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.DeveloperBoard
+import androidx.compose.material.icons.rounded.DeviceThermostat
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SportsEsports
+import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -42,8 +55,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,19 +69,33 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.lastlight.reborn.data.DeviceHardwareInfo
+import dev.lastlight.reborn.data.DeviceInfo
 import dev.lastlight.reborn.data.GameFilesStatus
 import dev.lastlight.reborn.data.GyroMode
 import dev.lastlight.reborn.data.LauncherConfig
 import dev.lastlight.reborn.data.PerfPreset
 import dev.lastlight.reborn.ui.theme.MetroColors
+import kotlinx.coroutines.delay
 import java.util.Locale
+
+private const val TAB_HOME = 0
+private const val TAB_CONTROLS = 1
+private const val TAB_GRAPHICS = 2
+private const val TAB_FILES = 3
+private const val TAB_ABOUT = 4
 
 @Composable
 fun LauncherScreen(
@@ -84,8 +113,18 @@ fun LauncherScreen(
     onExportSaves: () -> Unit,
     onImportSaves: () -> Unit
 ) {
+    val context = LocalContext.current
     val s = stringsFor(config.language)
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(TAB_HOME) }
+
+    val hwInfo = remember { DeviceInfo.readHardware(context) }
+    var batteryTempC by remember { mutableStateOf(DeviceInfo.readBatteryTempC(context)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            batteryTempC = DeviceInfo.readBatteryTempC(context)
+            delay(3000L)
+        }
+    }
 
     val coverBitmap = remember(filesStatus.iconFile?.absolutePath) {
         filesStatus.iconFile?.let { runCatching { BitmapFactory.decodeFile(it.absolutePath)?.asImageBitmap() }.getOrNull() }
@@ -96,37 +135,12 @@ fun LauncherScreen(
             .fillMaxSize()
             .background(MetroColors.BgDeep)
     ) {
-        // Atmospheric backdrop: subtle dimmed art + warm tunnel glow
-        if (coverBitmap != null) {
-            Image(
-                bitmap = coverBitmap,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().alpha(0.18f)
-            )
-        }
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawRect(
-                brush = Brush.radialGradient(
-                    colors = listOf(MetroColors.Amber.copy(alpha = 0.14f), Color.Transparent),
-                    center = Offset(size.width * 0.82f, size.height * 0.25f),
-                    radius = size.width * 0.65f
-                )
-            )
-            drawRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        MetroColors.BgDeep.copy(alpha = 0.72f),
-                        MetroColors.BgDeep.copy(alpha = 0.52f),
-                        MetroColors.BgDeep.copy(alpha = 0.94f)
-                    )
-                )
-            )
-        }
+        // Atmospheric Metro backdrop behind entire right stage
+        AtmosphericBackdrop(coverBitmap = coverBitmap)
 
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Sleek AAA top navigation bar
-            TopNavBar(
+        Row(modifier = Modifier.fillMaxSize()) {
+            // Left slim glassmorphic navigation rail
+            LeftNavigationRail(
                 selectedTab = selectedTab,
                 language = config.language,
                 s = s,
@@ -137,28 +151,36 @@ fun LauncherScreen(
                 }
             )
 
-            // Main content area
+            // Main content stage
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 32.dp, vertical = 18.dp)
+                    .fillMaxHeight()
+                    .padding(horizontal = 22.dp, vertical = 14.dp)
             ) {
                 when (selectedTab) {
-                    0 -> HomeTab(
+                    TAB_HOME -> HomeDashboard(
                         config = config,
                         filesStatus = filesStatus,
+                        hwInfo = hwInfo,
+                        batteryTempC = batteryTempC,
                         coverBitmap = coverBitmap,
                         hasStoragePermission = hasStoragePermission,
+                        saveFilesCount = saveFilesCount,
                         statusMessage = statusMessage,
                         s = s,
+                        onConfigChange = onConfigChange,
                         onRequestStoragePermission = onRequestStoragePermission,
                         onPlayClick = onPlayClick,
-                        onOpenFilesTab = { selectedTab = 3 }
+                        onPickGameFolder = onPickGameFolder,
+                        onAutoFindGameFolder = onAutoFindGameFolder,
+                        onPickTurnipZip = onPickTurnipZip,
+                        onExportSaves = onExportSaves,
+                        onNavigateTab = { selectedTab = it }
                     )
-                    1 -> GraphicsTab(config, filesStatus, s, onConfigChange)
-                    2 -> ControlsTab(config, s, onConfigChange)
-                    3 -> FilesTab(
+                    TAB_CONTROLS -> ControlsTab(config, s, onConfigChange)
+                    TAB_GRAPHICS -> GraphicsTab(config, filesStatus, s, onConfigChange)
+                    TAB_FILES -> FilesTab(
                         config = config,
                         filesStatus = filesStatus,
                         saveFilesCount = saveFilesCount,
@@ -170,6 +192,12 @@ fun LauncherScreen(
                         onExportSaves = onExportSaves,
                         onImportSaves = onImportSaves
                     )
+                    TAB_ABOUT -> AboutTab(
+                        config = config,
+                        hwInfo = hwInfo,
+                        filesStatus = filesStatus,
+                        s = s
+                    )
                 }
             }
         }
@@ -177,266 +205,934 @@ fun LauncherScreen(
 }
 
 @Composable
-private fun TopNavBar(
+private fun AtmosphericBackdrop(coverBitmap: ImageBitmap?) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (coverBitmap != null) {
+            Image(
+                bitmap = coverBitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.76f)
+                    .align(Alignment.CenterEnd)
+                    .alpha(0.30f)
+            )
+        }
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            // Subtle warm atmospheric Metro haze on upper-center-right
+            drawRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        MetroColors.Amber.copy(alpha = 0.16f),
+                        MetroColors.AmberDim.copy(alpha = 0.06f),
+                        Color.Transparent
+                    ),
+                    center = Offset(size.width * 0.62f, size.height * 0.24f),
+                    radius = size.width * 0.50f
+                )
+            )
+            // Left-to-right dark gradient blending smoothly from sidebar into hero
+            drawRect(
+                brush = Brush.horizontalGradient(
+                    0.0f to MetroColors.BgDeep.copy(alpha = 0.96f),
+                    0.26f to MetroColors.BgDeep.copy(alpha = 0.84f),
+                    0.58f to MetroColors.BgDeep.copy(alpha = 0.42f),
+                    1.0f to MetroColors.BgDeep.copy(alpha = 0.72f)
+                )
+            )
+            // Bottom grounding vignette so bento cards pop crisply
+            drawRect(
+                brush = Brush.verticalGradient(
+                    0.0f to MetroColors.BgDeep.copy(alpha = 0.35f),
+                    0.50f to Color.Transparent,
+                    0.82f to MetroColors.BgDeep.copy(alpha = 0.82f),
+                    1.0f to MetroColors.BgDeep.copy(alpha = 0.96f)
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun LeftNavigationRail(
     selectedTab: Int,
     language: String,
     s: UiStrings,
     onSelectTab: (Int) -> Unit,
     onToggleLang: () -> Unit
 ) {
-    val tabs = listOf(s.tabHome, s.tabGraphics, s.tabControls, s.tabFiles)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MetroColors.BgDeep.copy(alpha = 0.70f))
-            .padding(horizontal = 32.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        // Brand mark
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(MetroColors.Amber.copy(alpha = 0.16f))
-                    .border(1.5.dp, MetroColors.Amber, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("M", color = MetroColors.AmberBright, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            }
-            Text(
-                text = "LastLight Reborn",
-                color = MetroColors.TextPrimary,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp
-            )
-        }
+    val items = listOf(
+        Triple(TAB_HOME, s.tabHome, Icons.Rounded.Home),
+        Triple(TAB_CONTROLS, s.tabControls, Icons.Rounded.SportsEsports),
+        Triple(TAB_GRAPHICS, s.tabGraphics, Icons.Rounded.Tune),
+        Triple(TAB_FILES, s.tabFiles, Icons.Rounded.Folder),
+        Triple(TAB_ABOUT, s.tabAbout, Icons.Rounded.Info)
+    )
 
-        // Center tabs with subtle amber underline
-        Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
-            tabs.forEachIndexed { idx, title ->
-                val active = idx == selectedTab
-                Column(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onSelectTab(idx) }
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = title,
-                        color = if (active) MetroColors.TextPrimary else MetroColors.TextMuted,
-                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                        fontSize = 14.sp
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Box(
-                        modifier = Modifier
-                            .width(if (active) 24.dp else 0.dp)
-                            .height(2.5.dp)
-                            .clip(CircleShape)
-                            .background(MetroColors.Amber)
-                    )
-                }
-            }
-        }
-
-        // Language pill
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(MetroColors.SurfaceGlass)
-                .border(1.dp, MetroColors.BorderSubtle, RoundedCornerShape(20.dp))
-                .clickable(onClick = onToggleLang)
-                .padding(horizontal = 12.dp, vertical = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "RU",
-                color = if (language == "ru") MetroColors.AmberBright else MetroColors.TextMuted,
-                fontWeight = if (language == "ru") FontWeight.Bold else FontWeight.Normal,
-                fontSize = 12.sp
-            )
-            Text("·", color = MetroColors.BorderSteel, fontSize = 12.sp)
-            Text(
-                text = "EN",
-                color = if (language == "en") MetroColors.AmberBright else MetroColors.TextMuted,
-                fontWeight = if (language == "en") FontWeight.Bold else FontWeight.Normal,
-                fontSize = 12.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun HomeTab(
-    config: LauncherConfig,
-    filesStatus: GameFilesStatus,
-    coverBitmap: ImageBitmap?,
-    hasStoragePermission: Boolean,
-    statusMessage: String?,
-    s: UiStrings,
-    onRequestStoragePermission: () -> Unit,
-    onPlayClick: () -> Unit,
-    onOpenFilesTab: () -> Unit
-) {
-    val ready = hasStoragePermission && filesStatus.isReadyToPlay
-
-    Row(
-        modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(28.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Left: sleek cover art card
-        Box(
-            modifier = Modifier
-                .size(180.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(MetroColors.SurfaceGlass)
-                .border(1.dp, MetroColors.BorderSteel.copy(alpha = 0.6f), RoundedCornerShape(18.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (coverBitmap != null) {
-                Image(
-                    bitmap = coverBitmap,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Text("M", color = MetroColors.Amber, fontWeight = FontWeight.Bold, fontSize = 64.sp)
-            }
-        }
-
-        // Right: title, status, active config pills, and Play CTA
+    Row(modifier = Modifier.fillMaxHeight()) {
         Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier
+                .width(164.dp)
+                .fillMaxHeight()
+                .background(MetroColors.SidebarBg)
+                .padding(horizontal = 12.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = s.appTitle,
-                color = MetroColors.TextPrimary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 30.sp,
-                letterSpacing = (-0.5).sp
-            )
-            Text(
-                text = s.appSubtitle,
-                color = MetroColors.TextSecondary,
-                fontSize = 13.sp
-            )
-
-            // Status row
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MetroColors.SurfaceGlass)
-                    .border(
-                        1.dp,
-                        if (ready) MetroColors.PhosphorGreen.copy(alpha = 0.35f) else MetroColors.Amber.copy(alpha = 0.4f),
-                        RoundedCornerShape(10.dp)
-                    )
-                    .clickable(enabled = hasStoragePermission && !ready) { onOpenFilesTab() }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Icon(
-                    imageVector = if (ready) Icons.Rounded.CheckCircle else Icons.Rounded.WarningAmber,
-                    contentDescription = null,
-                    tint = if (ready) MetroColors.PhosphorGreen else MetroColors.Amber,
-                    modifier = Modifier.size(16.dp)
-                )
-                Text(
-                    text = when {
-                        !hasStoragePermission -> s.statusNeedStoragePerm
-                        ready -> s.statusReady
-                        else -> s.statusMissingFiles
-                    },
-                    color = if (ready) MetroColors.TextPrimary else MetroColors.AmberBright,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            // Active settings chips
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                InfoTag("${config.fpsCap} FPS")
-                InfoTag(String.format(Locale.US, "%.2fx", config.resScale))
-                InfoTag(config.upscaler.uppercase(Locale.US))
-                InfoTag(if (config.useTurnip) (filesStatus.turnipName ?: "Turnip") else s.driverSystem)
-            }
-
-            if (!statusMessage.isNullOrBlank()) {
-                Text(statusMessage, color = MetroColors.AmberBright, fontSize = 12.sp)
-            }
-
-            Spacer(Modifier.height(4.dp))
-
-            // Primary Play button
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                if (!hasStoragePermission) {
-                    Button(
-                        onClick = onRequestStoragePermission,
-                        colors = ButtonDefaults.buttonColors(containerColor = MetroColors.Amber),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.height(50.dp)
-                    ) {
-                        Text(s.grantStoragePerm, color = MetroColors.BgDeep, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Brand logo mark: geometric golden Metro M + LastLight Reborn
+                Row(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    MetroLogoMark(modifier = Modifier.size(30.dp))
+                    Column {
+                        Text(
+                            text = "LastLight",
+                            color = MetroColors.TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            lineHeight = 16.sp
+                        )
+                        Text(
+                            text = "Reborn",
+                            color = MetroColors.TextSecondary,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            lineHeight = 14.sp
+                        )
                     }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .height(52.dp)
-                            .width(210.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(
-                                if (ready) Brush.horizontalGradient(listOf(MetroColors.AmberBright, MetroColors.Amber))
-                                else Brush.horizontalGradient(listOf(MetroColors.SurfaceElevated, MetroColors.SurfaceElevated))
-                            )
-                            .clickable(enabled = ready, onClick = onPlayClick),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(
-                                Icons.Rounded.PlayArrow,
-                                contentDescription = null,
-                                tint = if (ready) MetroColors.BgDeep else MetroColors.TextMuted,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Text(
-                                text = if (ready) s.play else s.notReady,
-                                color = if (ready) MetroColors.BgDeep else MetroColors.TextMuted,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
+                }
+
+                // Navigation buttons
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items.forEach { (id, label, icon) ->
+                        val active = id == selectedTab
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(
+                                    if (active) Brush.horizontalGradient(
+                                        listOf(
+                                            MetroColors.Amber.copy(alpha = 0.22f),
+                                            MetroColors.SurfaceElevated.copy(alpha = 0.72f)
+                                        )
+                                    ) else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
+                                )
+                                .border(
+                                    width = if (active) 1.dp else 0.dp,
+                                    color = if (active) MetroColors.BorderGlass else Color.Transparent,
+                                    shape = RoundedCornerShape(11.dp)
+                                )
+                                .clickable { onSelectTab(id) },
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (active) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .padding(vertical = 8.dp)
+                                        .width(3.dp)
+                                        .fillMaxHeight()
+                                        .clip(CircleShape)
+                                        .background(MetroColors.AmberBright)
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = label,
+                                    tint = if (active) MetroColors.TextPrimary else MetroColors.TextMuted,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = label,
+                                    color = if (active) MetroColors.TextPrimary else MetroColors.TextSecondary,
+                                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
             }
+
+            // Bottom language toggle pill
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MetroColors.SurfaceCard)
+                    .border(1.dp, MetroColors.BorderGlass, RoundedCornerShape(10.dp))
+                    .clickable(onClick = onToggleLang)
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "RU",
+                    color = if (language == "ru") MetroColors.AmberBright else MetroColors.TextMuted,
+                    fontWeight = if (language == "ru") FontWeight.Bold else FontWeight.Normal,
+                    fontSize = 11.sp
+                )
+                Text("  ·  ", color = MetroColors.BorderSteel, fontSize = 11.sp)
+                Text(
+                    text = "EN",
+                    color = if (language == "en") MetroColors.AmberBright else MetroColors.TextMuted,
+                    fontWeight = if (language == "en") FontWeight.Bold else FontWeight.Normal,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        // Hairline vertical divider
+        Box(
+            modifier = Modifier
+                .width(1.dp)
+                .fillMaxHeight()
+                .background(MetroColors.BorderGlass)
+        )
+    }
+}
+
+@Composable
+private fun MetroLogoMark(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val path = Path().apply {
+            moveTo(w * 0.10f, h * 0.88f)
+            lineTo(w * 0.10f, h * 0.14f)
+            lineTo(w * 0.28f, h * 0.14f)
+            lineTo(w * 0.50f, h * 0.52f)
+            lineTo(w * 0.72f, h * 0.14f)
+            lineTo(w * 0.90f, h * 0.14f)
+            lineTo(w * 0.90f, h * 0.88f)
+            lineTo(w * 0.72f, h * 0.88f)
+            lineTo(w * 0.72f, h * 0.44f)
+            lineTo(w * 0.50f, h * 0.78f)
+            lineTo(w * 0.28f, h * 0.44f)
+            lineTo(w * 0.28f, h * 0.88f)
+            close()
+        }
+        drawPath(
+            path = path,
+            brush = Brush.verticalGradient(
+                listOf(MetroColors.AmberBright, MetroColors.AmberDeep)
+            )
+        )
+    }
+}
+
+@Composable
+private fun HomeDashboard(
+    config: LauncherConfig,
+    filesStatus: GameFilesStatus,
+    hwInfo: DeviceHardwareInfo,
+    batteryTempC: Float?,
+    coverBitmap: ImageBitmap?,
+    hasStoragePermission: Boolean,
+    saveFilesCount: Int,
+    statusMessage: String?,
+    s: UiStrings,
+    onConfigChange: (LauncherConfig) -> Unit,
+    onRequestStoragePermission: () -> Unit,
+    onPlayClick: () -> Unit,
+    onPickGameFolder: () -> Unit,
+    onAutoFindGameFolder: () -> Unit,
+    onPickTurnipZip: () -> Unit,
+    onExportSaves: () -> Unit,
+    onNavigateTab: (Int) -> Unit
+) {
+    val ready = hasStoragePermission && filesStatus.isReadyToPlay
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // 1. TOP HERO ROW: Left = Metro Title + Status Pills + Launch CTA | Right = Device Info Card
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Iconic Metro: Last Light Redux hero wordmark
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "METRO",
+                        color = MetroColors.TextPrimary,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 30.sp,
+                        letterSpacing = 1.5.sp,
+                        lineHeight = 32.sp
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "LAST LIGHT",
+                            color = MetroColors.TextPrimary.copy(alpha = 0.90f),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            letterSpacing = 1.8.sp
+                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(MetroColors.AmberBright, MetroColors.Amber)
+                                    )
+                                )
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "REDUX",
+                                color = Color(0xFF140D04),
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 10.sp,
+                                letterSpacing = 2.2.sp
+                            )
+                        }
+                    }
+                }
+
+                // Status & Platform pills
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Port readiness pill
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (ready) MetroColors.PhosphorGreen.copy(alpha = 0.14f)
+                                else MetroColors.Amber.copy(alpha = 0.16f)
+                            )
+                            .border(
+                                1.dp,
+                                if (ready) MetroColors.PhosphorGreen.copy(alpha = 0.35f)
+                                else MetroColors.Amber.copy(alpha = 0.45f),
+                                RoundedCornerShape(8.dp)
+                            )
+                            .clickable(enabled = !ready) {
+                                if (!hasStoragePermission) onRequestStoragePermission() else onNavigateTab(TAB_FILES)
+                            }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (ready) Icons.Rounded.CheckCircle else Icons.Rounded.WarningAmber,
+                            contentDescription = null,
+                            tint = if (ready) MetroColors.PhosphorGreen else MetroColors.AmberBright,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = when {
+                                !hasStoragePermission -> s.statusNeedStoragePerm
+                                ready -> s.statusReadyShort
+                                else -> s.statusMissingShort
+                            },
+                            color = if (ready) MetroColors.PhosphorGreen else MetroColors.AmberBright,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                    }
+
+                    HeroPill("v1.0.0")
+                    HeroPill(s.appSubtitle)
+                }
+
+                Spacer(Modifier.height(2.dp))
+
+                // Primary Launch CTA + Folder quick button
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (!hasStoragePermission) {
+                        Box(
+                            modifier = Modifier
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(MetroColors.AmberBright, MetroColors.AmberDeep)
+                                    )
+                                )
+                                .clickable(onClick = onRequestStoragePermission)
+                                .padding(horizontal = 22.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = s.grantStoragePerm,
+                                color = Color(0xFF140D04),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .height(44.dp)
+                                .width(196.dp)
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(
+                                    if (ready) Brush.horizontalGradient(
+                                        listOf(MetroColors.AmberBright, MetroColors.AmberDeep)
+                                    ) else Brush.horizontalGradient(
+                                        listOf(MetroColors.SurfaceElevated, MetroColors.SurfaceElevated)
+                                    )
+                                )
+                                .clickable(enabled = ready, onClick = onPlayClick),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(7.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.PlayArrow,
+                                    contentDescription = null,
+                                    tint = if (ready) Color(0xFF140D04) else MetroColors.TextMuted,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = if (ready) s.play else s.notReady,
+                                    color = if (ready) Color(0xFF140D04) else MetroColors.TextMuted,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // Translucent folder button beside Launch
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(MetroColors.SurfaceCard)
+                            .border(1.dp, MetroColors.BorderGlass, RoundedCornerShape(13.dp))
+                            .clickable(onClick = onPickGameFolder),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.FolderOpen,
+                            contentDescription = s.pickFolder,
+                            tint = MetroColors.TextPrimary,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+                }
+
+                if (!statusMessage.isNullOrBlank()) {
+                    Text(
+                        text = statusMessage,
+                        color = MetroColors.AmberBright,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Right-hand real Device Info glass card
+            DeviceInfoGlassCard(
+                hwInfo = hwInfo,
+                turnipName = if (config.useTurnip) filesStatus.turnipName else null,
+                s = s,
+                modifier = Modifier.width(236.dp)
+            )
+        }
+
+        // 2. MIDDLE BENTO ROW: Performance | Temperature | Driver & Files
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Card 1: Performance target & scale
+            BentoGlassCard(
+                modifier = Modifier
+                    .weight(1.25f)
+                    .height(78.dp)
+                    .clickable { onNavigateTab(TAB_GRAPHICS) }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.BarChart,
+                                contentDescription = null,
+                                tint = MetroColors.TextSecondary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = s.perfCardTitle,
+                                color = MetroColors.TextSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Text(
+                            text = "${config.fpsCap} FPS",
+                            color = MetroColors.PhosphorGreen,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 19.sp
+                        )
+                        Text(
+                            text = "${String.format(Locale.US, "%.2fx", config.resScale)} • ${config.upscaler.uppercase(Locale.US)}",
+                            color = MetroColors.TextMuted,
+                            fontSize = 10.sp
+                        )
+                    }
+                    // Subtle flatline target pacing visual
+                    Canvas(modifier = Modifier.width(62.dp).height(26.dp)) {
+                        val y = size.height * 0.42f
+                        val linePath = Path().apply {
+                            moveTo(0f, y + 1f)
+                            lineTo(size.width * 0.22f, y - 1f)
+                            lineTo(size.width * 0.48f, y + 0.5f)
+                            lineTo(size.width * 0.74f, y - 0.8f)
+                            lineTo(size.width, y)
+                        }
+                        val fillPath = Path().apply {
+                            addPath(linePath)
+                            lineTo(size.width, size.height)
+                            lineTo(0f, size.height)
+                            close()
+                        }
+                        drawPath(
+                            fillPath,
+                            brush = Brush.verticalGradient(
+                                listOf(MetroColors.PhosphorGreen.copy(alpha = 0.24f), Color.Transparent)
+                            )
+                        )
+                        drawPath(
+                            linePath,
+                            color = MetroColors.PhosphorGreen,
+                            style = Stroke(width = 1.8f, cap = StrokeCap.Round)
+                        )
+                    }
+                }
+            }
+
+            // Card 2: Real live battery temperature
+            BentoGlassCard(
+                modifier = Modifier
+                    .weight(0.85f)
+                    .height(78.dp)
+            ) {
+                val tempColor = when {
+                    batteryTempC == null -> MetroColors.TextSecondary
+                    batteryTempC >= 43f -> MetroColors.DangerRed
+                    batteryTempC >= 39f -> MetroColors.AmberBright
+                    else -> MetroColors.PhosphorGreen
+                }
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.DeviceThermostat,
+                            contentDescription = null,
+                            tint = MetroColors.TextSecondary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = s.tempCardTitle,
+                            color = MetroColors.TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Text(
+                        text = batteryTempC?.let { String.format(Locale.US, "%.1f °C", it) } ?: "—",
+                        color = tempColor,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
+                    )
+                    Spacer(Modifier.height(1.dp))
+                }
+            }
+
+            // Card 3: Driver & Files status
+            BentoGlassCard(
+                modifier = Modifier
+                    .weight(1.15f)
+                    .height(78.dp)
+                    .clickable { onNavigateTab(TAB_FILES) }
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.Memory,
+                            contentDescription = null,
+                            tint = MetroColors.TextSecondary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = s.driverCardTitle,
+                            color = MetroColors.TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Text(
+                        text = if (config.useTurnip) (filesStatus.turnipName ?: s.driverTurnip) else s.driverSystem,
+                        color = MetroColors.TextPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FileCheckBadge("NUP", filesStatus.nupFile != null)
+                        FileCheckBadge("Pack", filesStatus.patchedDir != null)
+                        FileCheckBadge("Shaders", filesStatus.shaderLibFile != null)
+                    }
+                }
+            }
+        }
+
+        // 3. BOTTOM BENTO ROW: Profiles quick switcher | Quick Actions
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Profiles card with direct 1-tap preset switcher
+            Box(
+                modifier = Modifier
+                    .weight(1.35f)
+                    .height(64.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MetroColors.SurfaceCard)
+                    .border(1.dp, MetroColors.BorderGlass, RoundedCornerShape(14.dp))
+                    .clickable { onNavigateTab(TAB_GRAPHICS) }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Atmospheric thumbnail accent on left
+                    Box(
+                        modifier = Modifier
+                            .width(74.dp)
+                            .fillMaxHeight()
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(MetroColors.AmberDim.copy(alpha = 0.35f), MetroColors.SurfaceCard)
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (coverBitmap != null) {
+                            Image(
+                                bitmap = coverBitmap,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().alpha(0.55f)
+                            )
+                        } else {
+                            Icon(
+                                Icons.Rounded.Tune,
+                                contentDescription = null,
+                                tint = MetroColors.AmberBright.copy(alpha = 0.7f),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f).padding(end = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = s.profilesTitle,
+                                color = MetroColors.TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                text = when (config.preset) {
+                                    PerfPreset.COOL -> s.presetCool
+                                    PerfPreset.BALANCED -> s.presetBalanced
+                                    PerfPreset.MAX -> s.presetMax
+                                    PerfPreset.CUSTOM -> s.presetCustom
+                                },
+                                color = MetroColors.TextMuted,
+                                fontSize = 11.sp,
+                                maxLines = 1
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            MiniPresetPill("30", config.preset == PerfPreset.COOL) {
+                                onConfigChange(config.copy(preset = PerfPreset.COOL, fpsCap = 30, resScale = 0.75f, upscaler = "sgsr1"))
+                            }
+                            MiniPresetPill("45", config.preset == PerfPreset.BALANCED) {
+                                onConfigChange(config.copy(preset = PerfPreset.BALANCED, fpsCap = 45, resScale = 0.85f, upscaler = "sgsr1"))
+                            }
+                            MiniPresetPill("60", config.preset == PerfPreset.MAX) {
+                                onConfigChange(config.copy(preset = PerfPreset.MAX, fpsCap = 60, resScale = 1.0f, upscaler = "sgsr1"))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Quick Actions card (matching the 4-button reference strip)
+            BentoGlassCard(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(64.dp),
+                paddingVertical = 8.dp,
+                paddingHorizontal = 12.dp
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.Bolt,
+                            contentDescription = null,
+                            tint = MetroColors.AmberBright,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = s.quickActionsTitle,
+                            color = MetroColors.TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        QuickActionButton(Icons.Rounded.FolderOpen, s.pickFolder, onPickGameFolder)
+                        QuickActionButton(Icons.Rounded.Search, s.autoFind, onAutoFindGameFolder)
+                        QuickActionButton(Icons.Rounded.Memory, s.pickDriver, onPickTurnipZip)
+                        QuickActionButton(Icons.Rounded.Save, s.exportSaves, onExportSaves)
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun InfoTag(text: String) {
+private fun DeviceInfoGlassCard(
+    hwInfo: DeviceHardwareInfo,
+    turnipName: String?,
+    s: UiStrings,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(MetroColors.SurfaceCard)
+            .border(1.dp, MetroColors.BorderGlass, RoundedCornerShape(14.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        // Header: Device title + model
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.PhoneAndroid,
+                    contentDescription = null,
+                    tint = MetroColors.TextSecondary,
+                    modifier = Modifier.size(13.dp)
+                )
+                Text(
+                    text = s.deviceTitle,
+                    color = MetroColors.TextSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Text(
+                text = hwInfo.deviceName,
+                color = MetroColors.TextPrimary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(MetroColors.BorderGlass)
+        )
+
+        DeviceSpecRow(Icons.Rounded.DeveloperBoard, hwInfo.socName)
+        DeviceSpecRow(
+            Icons.Rounded.Memory,
+            if (!turnipName.isNullOrBlank()) "${hwInfo.gpuName} • Turnip" else hwInfo.gpuName
+        )
+        if (hwInfo.ramGb > 0) {
+            DeviceSpecRow(Icons.Rounded.Storage, "${hwInfo.ramGb} GB RAM")
+        }
+        DeviceSpecRow(Icons.Rounded.Android, hwInfo.androidVersion)
+    }
+}
+
+@Composable
+private fun DeviceSpecRow(icon: ImageVector, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MetroColors.TextMuted,
+            modifier = Modifier.size(13.dp)
+        )
+        Text(
+            text = value,
+            color = MetroColors.TextPrimary.copy(alpha = 0.90f),
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun HeroPill(text: String) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(MetroColors.SurfaceElevated.copy(alpha = 0.85f))
-            .border(1.dp, MetroColors.BorderSubtle, RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 5.dp)
+            .background(MetroColors.SurfaceCard)
+            .border(1.dp, MetroColors.BorderGlass, RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Text(
             text = text,
             color = MetroColors.TextSecondary,
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            maxLines = 1
         )
+    }
+}
+
+@Composable
+private fun MiniPresetPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) MetroColors.Amber else MetroColors.SurfaceElevated)
+            .border(1.dp, if (selected) MetroColors.AmberBright else MetroColors.BorderGlass, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 9.dp, vertical = 5.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = if (selected) Color(0xFF140D04) else MetroColors.TextSecondary,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 11.sp
+        )
+    }
+}
+
+@Composable
+private fun QuickActionButton(icon: ImageVector, desc: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MetroColors.SurfaceElevated.copy(alpha = 0.9f))
+            .border(1.dp, MetroColors.BorderGlass, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = desc,
+            tint = MetroColors.TextPrimary,
+            modifier = Modifier.size(16.dp)
+        )
+    }
+}
+
+@Composable
+private fun BentoGlassCard(
+    modifier: Modifier = Modifier,
+    paddingHorizontal: androidx.compose.ui.unit.Dp = 14.dp,
+    paddingVertical: androidx.compose.ui.unit.Dp = 10.dp,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(MetroColors.SurfaceCard)
+            .border(1.dp, MetroColors.BorderGlass, RoundedCornerShape(14.dp))
+            .padding(horizontal = paddingHorizontal, vertical = paddingVertical)
+    ) {
+        content()
     }
 }
 
@@ -449,10 +1145,10 @@ private fun GraphicsTab(
 ) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(s.presetTitle, color = MetroColors.TextSecondary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PresetCard(s.presetCool, s.presetCoolDesc, Icons.Rounded.AcUnit, config.preset == PerfPreset.COOL, Modifier.weight(1f)) {
                 onConfigChange(config.copy(preset = PerfPreset.COOL, fpsCap = 30, resScale = 0.75f, upscaler = "sgsr1"))
             }
@@ -489,7 +1185,7 @@ private fun GraphicsTab(
             }
 
             Spacer(Modifier.height(10.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(s.gpuDriver, color = MetroColors.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -525,7 +1221,7 @@ private fun GraphicsTab(
 private fun ControlsTab(config: LauncherConfig, s: UiStrings, onConfigChange: (LauncherConfig) -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         GlassCard {
             SettingSwitch(s.touchHud, config.touchHudEnabled) {
@@ -601,7 +1297,6 @@ private fun FilesTab(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Game folder card with native system picker
         GlassCard {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -643,7 +1338,6 @@ private fun FilesTab(
             }
         }
 
-        // Turnip driver card with native system picker
         GlassCard {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -671,7 +1365,6 @@ private fun FilesTab(
             }
         }
 
-        // Saves backup card
         GlassCard {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -704,15 +1397,57 @@ private fun FilesTab(
 }
 
 @Composable
+private fun AboutTab(
+    config: LauncherConfig,
+    hwInfo: DeviceHardwareInfo,
+    filesStatus: GameFilesStatus,
+    s: UiStrings
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        GlassCard {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                MetroLogoMark(modifier = Modifier.size(34.dp))
+                Column {
+                    Text(s.aboutTitle, color = MetroColors.TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text(s.appSubtitle, color = MetroColors.AmberBright, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(s.aboutDesc, color = MetroColors.TextSecondary, fontSize = 13.sp, lineHeight = 19.sp)
+            Spacer(Modifier.height(10.dp))
+            Text(s.aboutEngine, color = MetroColors.TextPrimary, fontSize = 12.sp)
+            Text(s.aboutBuild, color = MetroColors.TextSecondary, fontSize = 12.sp)
+        }
+
+        GlassCard {
+            Text(s.deviceTitle, color = MetroColors.TextSecondary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+            Spacer(Modifier.height(6.dp))
+            Text("${hwInfo.deviceName} • ${hwInfo.socName} • ${hwInfo.gpuName}", color = MetroColors.TextPrimary, fontSize = 13.sp)
+            Text(
+                text = "${hwInfo.ramGb} GB RAM • ${hwInfo.androidVersion} • ${if (config.useTurnip) (filesStatus.turnipName ?: s.driverTurnip) else s.driverSystem}",
+                color = MetroColors.TextSecondary,
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
 private fun FileCheckBadge(label: String, ok: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(
             modifier = Modifier
-                .size(7.dp)
+                .size(6.dp)
                 .clip(CircleShape)
                 .background(if (ok) MetroColors.PhosphorGreen else MetroColors.DangerRed)
         )
-        Text(label, color = if (ok) MetroColors.TextPrimary else MetroColors.TextMuted, fontSize = 11.sp)
+        Text(label, color = if (ok) MetroColors.TextPrimary else MetroColors.TextMuted, fontSize = 10.sp)
     }
 }
 
@@ -722,8 +1457,8 @@ private fun GlassCard(content: @Composable () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(MetroColors.SurfaceGlass)
-            .border(1.dp, MetroColors.BorderSubtle, RoundedCornerShape(14.dp))
+            .background(MetroColors.SurfaceCard)
+            .border(1.dp, MetroColors.BorderGlass, RoundedCornerShape(14.dp))
             .padding(16.dp)
     ) {
         content()
@@ -742,31 +1477,31 @@ private fun PresetCard(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) MetroColors.Amber.copy(alpha = 0.14f) else MetroColors.SurfaceGlass)
+            .background(if (selected) MetroColors.Amber.copy(alpha = 0.16f) else MetroColors.SurfaceCard)
             .border(
                 width = if (selected) 1.5.dp else 1.dp,
-                color = if (selected) MetroColors.Amber else MetroColors.BorderSubtle,
+                color = if (selected) MetroColors.Amber else MetroColors.BorderGlass,
                 shape = RoundedCornerShape(14.dp)
             )
             .clickable(onClick = onClick)
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             Icon(
                 icon,
                 contentDescription = null,
                 tint = if (selected) MetroColors.AmberBright else MetroColors.TextSecondary,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(17.dp)
             )
             Text(
                 text = title,
                 color = if (selected) MetroColors.TextPrimary else MetroColors.TextSecondary,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp
+                fontSize = 13.sp
             )
         }
-        Text(desc, color = MetroColors.TextMuted, fontSize = 12.sp)
+        Text(desc, color = MetroColors.TextMuted, fontSize = 11.sp)
     }
 }
 
@@ -776,13 +1511,13 @@ private fun SegmentChip(label: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
             .background(if (selected) MetroColors.Amber else MetroColors.SurfaceElevated)
-            .border(1.dp, if (selected) MetroColors.Amber else MetroColors.BorderSubtle, RoundedCornerShape(10.dp))
+            .border(1.dp, if (selected) MetroColors.Amber else MetroColors.BorderGlass, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 7.dp)
     ) {
         Text(
             text = label,
-            color = if (selected) MetroColors.BgDeep else MetroColors.TextSecondary,
+            color = if (selected) Color(0xFF140D04) else MetroColors.TextSecondary,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             fontSize = 12.sp,
             maxLines = 1,
@@ -821,8 +1556,7 @@ private fun SettingSwitch(label: String, checked: Boolean, onCheckedChange: (Boo
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = MetroColors.BgDeep,
-                checkedTrackColor = MetroColors.Amber,
-                uncheckedTrackColor = MetroColors.SurfaceElevated
+                checkedTrackColor = MetroColors.Amber
             )
         )
     }

@@ -12,28 +12,44 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,8 +58,10 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import dev.lastlight.reborn.data.AppPrefs
 import dev.lastlight.reborn.data.GamePaths
+import dev.lastlight.reborn.data.GyroMode
 import dev.lastlight.reborn.data.LauncherConfig
 import dev.lastlight.reborn.nativecore.NativeBridge
+import dev.lastlight.reborn.ui.UiStrings
 import dev.lastlight.reborn.ui.hud.PerfOverlay
 import dev.lastlight.reborn.ui.hud.ShooterHudOverlay
 import dev.lastlight.reborn.ui.stringsFor
@@ -60,6 +78,15 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
     private var menuOpen by mutableStateOf(false)
     private var gamepadActive by mutableStateOf(false)
     private var hostStarted = false
+
+    private fun setPauseMenu(open: Boolean) {
+        if (menuOpen == open) return
+        menuOpen = open
+        if (hostStarted) {
+            NativeBridge.lifecycle(if (open) 4 else 5)
+        }
+        if (!open) hideSystemBars()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,12 +106,12 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         // labelled = 1 maps KEYCODE_BUTTON_A/B/X/Y 1:1 to Nintendo Switch A/B/X/Y labels
         NativeBridge.touchControlsEnable(false)
         NativeBridge.inputDeviceAdded(NativeBridge.VIRTUAL_PAD_DEVICE_ID, "LastLight Touch", 1)
-        NativeBridge.inputDeadzone(0.08f)
+        // Zero host deadzone while virtual touch controls drive the sticks (ShooterHudOverlay handles radial DZ cleanly)
+        NativeBridge.inputDeadzone(0.0f)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                menuOpen = !menuOpen
-                NativeBridge.lifecycle(if (menuOpen) 4 else 5)
+                setPauseMenu(!menuOpen)
             }
         })
 
@@ -103,10 +130,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                             config = config,
                             strings = s,
                             visible = config.touchHudEnabled && !gamepadActive && !menuOpen,
-                            onOpenMenu = {
-                                menuOpen = true
-                                NativeBridge.lifecycle(4) // pause
-                            }
+                            onOpenMenu = { setPauseMenu(true) }
                         )
 
                         if (config.showPerfOverlay) {
@@ -118,95 +142,19 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                         }
 
                         if (menuOpen) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color(0xBB080A0C)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .width(360.dp)
-                                        .background(MetroColors.SurfaceDark, RoundedCornerShape(10.dp))
-                                        .border(1.dp, MetroColors.Amber, RoundedCornerShape(10.dp))
-                                        .padding(20.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Text(
-                                        text = "LAST LIGHT REBORN",
-                                        color = MetroColors.Amber,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 16.sp
-                                    )
-                                    Text(
-                                        text = "${s.lookSens}: ${String.format(Locale.US, "%.2f", config.touchLookSensitivity)}",
-                                        color = MetroColors.TextPrimary,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 12.sp
-                                    )
-                                    Slider(
-                                        value = config.touchLookSensitivity,
-                                        onValueChange = {
-                                            config = config.copy(touchLookSensitivity = it)
-                                            prefs.save(config)
-                                        },
-                                        valueRange = 0.4f..3.0f,
-                                        colors = SliderDefaults.colors(thumbColor = MetroColors.Amber, activeTrackColor = MetroColors.Amber)
-                                    )
-                                    Text(
-                                        text = "${s.adsSens}: ${String.format(Locale.US, "%.2f", config.touchAdsSensitivity)}",
-                                        color = MetroColors.TextPrimary,
-                                        fontSize = 12.sp
-                                    )
-                                    Slider(
-                                        value = config.touchAdsSensitivity,
-                                        onValueChange = {
-                                            config = config.copy(touchAdsSensitivity = it)
-                                            prefs.save(config)
-                                        },
-                                        valueRange = 0.2f..2.0f,
-                                        colors = SliderDefaults.colors(thumbColor = MetroColors.Amber, activeTrackColor = MetroColors.Amber)
-                                    )
-                                    Text(
-                                        text = "${s.gyroSens}: ${String.format(Locale.US, "%.2f", config.gyroSensitivity)}",
-                                        color = MetroColors.TextPrimary,
-                                        fontSize = 12.sp
-                                    )
-                                    Slider(
-                                        value = config.gyroSensitivity,
-                                        onValueChange = {
-                                            config = config.copy(gyroSensitivity = it)
-                                            prefs.save(config)
-                                        },
-                                        valueRange = 0.2f..3.0f,
-                                        colors = SliderDefaults.colors(thumbColor = MetroColors.Amber, activeTrackColor = MetroColors.Amber)
-                                    )
-                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        Button(
-                                            onClick = {
-                                                menuOpen = false
-                                                NativeBridge.lifecycle(5) // continue
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = MetroColors.Amber),
-                                            shape = RoundedCornerShape(6.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text(s.resumeGame, color = MetroColors.BgDeep, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                        }
-                                        OutlinedButton(
-                                            onClick = {
-                                                finish()
-                                                NativeBridge.terminateProcess()
-                                            },
-                                            shape = RoundedCornerShape(6.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text(s.exitToLauncher, color = MetroColors.DangerRed, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                        }
-                                    }
+                            InGamePauseOverlay(
+                                config = config,
+                                s = s,
+                                onUpdateConfig = { updated ->
+                                    config = updated
+                                    prefs.save(updated)
+                                },
+                                onResume = { setPauseMenu(false) },
+                                onExit = {
+                                    finish()
+                                    NativeBridge.terminateProcess()
                                 }
-                            }
+                            )
                         }
                     }
                 }
@@ -266,14 +214,12 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         if ((src and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
             (src and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
         ) {
-            if (!gamepadActive) gamepadActive = true
+            if (!gamepadActive) {
+                gamepadActive = true
+                NativeBridge.inputDeadzone(0.08f)
+            }
             val down = event.action == KeyEvent.ACTION_DOWN
             if (NativeBridge.inputKey(event.deviceId, event.keyCode, down)) return true
-        }
-        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
-            menuOpen = !menuOpen
-            NativeBridge.lifecycle(if (menuOpen) 4 else 5)
-            return true
         }
         return super.dispatchKeyEvent(event)
     }
@@ -283,7 +229,10 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         if ((src and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
             (src and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
         ) {
-            if (!gamepadActive) gamepadActive = true
+            if (!gamepadActive) {
+                gamepadActive = true
+                NativeBridge.inputDeadzone(0.08f)
+            }
             val axes = intArrayOf(
                 MotionEvent.AXIS_X, MotionEvent.AXIS_Y,
                 MotionEvent.AXIS_Z, MotionEvent.AXIS_RZ,
@@ -299,6 +248,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (gamepadActive && ev.actionMasked == MotionEvent.ACTION_DOWN) {
             gamepadActive = false
+            NativeBridge.inputDeadzone(0.0f)
         }
         return super.dispatchTouchEvent(ev)
     }
@@ -309,5 +259,238 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+    }
+}
+
+@Composable
+private fun InGamePauseOverlay(
+    config: LauncherConfig,
+    s: UiStrings,
+    onUpdateConfig: (LauncherConfig) -> Unit,
+    onResume: () -> Unit,
+    onExit: () -> Unit
+) {
+    // Clicking anywhere on the dimmed backdrop closes the pause menu
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xC807090C))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onResume
+            )
+            .padding(horizontal = 24.dp, vertical = 14.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 540.dp)
+                .heightIn(max = 330.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MetroColors.SurfaceDark.copy(alpha = 0.96f))
+                .border(1.dp, MetroColors.BorderGlass, RoundedCornerShape(16.dp))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {} // absorb clicks inside card
+                )
+                .padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Header with explicit Close (X) button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(MetroColors.Amber)
+                    )
+                    Text(
+                        text = "LastLight Reborn",
+                        color = MetroColors.TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(MetroColors.SurfaceElevated)
+                        .border(1.dp, MetroColors.BorderSubtle, CircleShape)
+                        .clickable(onClick = onResume),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = s.resumeGame,
+                        tint = MetroColors.TextPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            // Two-column compact scrollable body (guaranteed never to clip Resume/Exit)
+            Row(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                // Left column: sensitivities
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    CompactPauseSlider(
+                        label = "${s.lookSens}: ${String.format(Locale.US, "%.2f", config.touchLookSensitivity)}",
+                        value = config.touchLookSensitivity,
+                        range = 0.4f..3.0f
+                    ) { onUpdateConfig(config.copy(touchLookSensitivity = it)) }
+
+                    CompactPauseSlider(
+                        label = "${s.adsSens}: ${String.format(Locale.US, "%.2f", config.touchAdsSensitivity)}",
+                        value = config.touchAdsSensitivity,
+                        range = 0.2f..2.0f
+                    ) { onUpdateConfig(config.copy(touchAdsSensitivity = it)) }
+
+                    CompactPauseSlider(
+                        label = "${s.gyroSens}: ${String.format(Locale.US, "%.2f", config.gyroSensitivity)}",
+                        value = config.gyroSensitivity,
+                        range = 0.2f..3.0f
+                    ) { onUpdateConfig(config.copy(gyroSensitivity = it)) }
+                }
+
+                // Right column: gyro mode + ADS toggle + opacity
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(s.gyroMode, color = MetroColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        PauseChip(s.gyroOff, config.gyroMode == GyroMode.OFF) {
+                            onUpdateConfig(config.copy(gyroMode = GyroMode.OFF))
+                        }
+                        PauseChip(s.gyroAdsShort, config.gyroMode == GyroMode.ADS) {
+                            onUpdateConfig(config.copy(gyroMode = GyroMode.ADS))
+                        }
+                        PauseChip(s.gyroAlways, config.gyroMode == GyroMode.ALWAYS) {
+                            onUpdateConfig(config.copy(gyroMode = GyroMode.ALWAYS))
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = s.adsToggle,
+                            color = MetroColors.TextPrimary,
+                            fontSize = 12.sp,
+                            modifier = Modifier.weight(1f).padding(end = 8.dp)
+                        )
+                        Switch(
+                            checked = config.adsToggle,
+                            onCheckedChange = { onUpdateConfig(config.copy(adsToggle = it)) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MetroColors.BgDeep,
+                                checkedTrackColor = MetroColors.Amber
+                            )
+                        )
+                    }
+
+                    CompactPauseSlider(
+                        label = "${s.hudOpacity}: ${String.format(Locale.US, "%.0f%%", config.hudOpacity * 100)}",
+                        value = config.hudOpacity,
+                        range = 0.25f..1.0f
+                    ) { onUpdateConfig(config.copy(hudOpacity = it)) }
+                }
+            }
+
+            // Pinned bottom action bar — always visible and tappable
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = onResume,
+                    colors = ButtonDefaults.buttonColors(containerColor = MetroColors.Amber),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f).height(40.dp)
+                ) {
+                    Text(
+                        text = s.resumeGame,
+                        color = MetroColors.BgDeep,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+                OutlinedButton(
+                    onClick = onExit,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f).height(40.dp)
+                ) {
+                    Text(
+                        text = s.exitToLauncher,
+                        color = MetroColors.DangerRed,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactPauseSlider(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    onChange: (Float) -> Unit
+) {
+    Column {
+        Text(label, color = MetroColors.TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = range,
+            modifier = Modifier.height(30.dp),
+            colors = SliderDefaults.colors(
+                thumbColor = MetroColors.AmberBright,
+                activeTrackColor = MetroColors.Amber,
+                inactiveTrackColor = MetroColors.BorderSubtle
+            )
+        )
+    }
+}
+
+@Composable
+private fun PauseChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) MetroColors.Amber else MetroColors.SurfaceElevated)
+            .border(1.dp, if (selected) MetroColors.Amber else MetroColors.BorderSubtle, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 9.dp, vertical = 5.dp)
+    ) {
+        Text(
+            text = label,
+            color = if (selected) MetroColors.BgDeep else MetroColors.TextSecondary,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            fontSize = 11.sp
+        )
     }
 }

@@ -11,20 +11,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 object MetroColors {
-    val BgDeep = Color(0xFF0A0C0F)
-    val BgTunnel = Color(0xFF12161B)
-    val SurfaceGlass = Color(0xCC151A20)
-    val SurfaceDark = Color(0xFF14191F)
-    val SurfaceElevated = Color(0xFF1C232B)
-    val BorderSubtle = Color(0xFF28313B)
+    val BgDeep = Color(0xFF090B0E)
+    val BgTunnel = Color(0xFF101318)
+    val SidebarBg = Color(0xE80C0E12)
+    val SurfaceGlass = Color(0xB814181E)
+    val SurfaceCard = Color(0xC812161C)
+    val SurfaceDark = Color(0xFF14181F)
+    val SurfaceElevated = Color(0xFF1C222B)
+    val BorderGlass = Color(0x1FFFFFFF)
+    val BorderSubtle = Color(0xFF27303A)
     val BorderSteel = Color(0xFF34404D)
     val Amber = Color(0xFFE5953A)          // Warm Nixie / watch amber
-    val AmberBright = Color(0xFFF3B05A)
+    val AmberBright = Color(0xFFF6B747)    // Vibrant gold highlight (CTA & Metro M)
+    val AmberDeep = Color(0xFFD97D1E)      // CTA gradient end
     val AmberDim = Color(0xFF7A4915)
-    val PhosphorGreen = Color(0xFF4CD672)  // Subtle ready indicator
+    val PhosphorGreen = Color(0xFF4CD672)  // Subtle ready / FPS / cool temp indicator
     val DangerRed = Color(0xFFE05246)
-    val TextPrimary = Color(0xFFF2EFE9)
-    val TextSecondary = Color(0xFFA2ACB6)
+    val TextPrimary = Color(0xFFF3F0EA)
+    val TextSecondary = Color(0xFFA4AEB8)
     val TextMuted = Color(0xFF6B7682)
 }
 
